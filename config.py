@@ -27,6 +27,12 @@ STATEMENT_TYPES = {
     "kpi_metrics": "financials/metrics",
 }
 
+# Period types: annual (default) and quarterly
+PERIOD_TYPES = {
+    "annual": "",
+    "quarterly": "?p=quarterly",
+}
+
 # Request headers to mimic a browser
 HEADERS = {
     "User-Agent": (

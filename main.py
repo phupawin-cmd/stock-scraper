@@ -31,20 +31,22 @@ def print_results(all_data: Dict):
     print("  📊 SCRAPING COMPLETE - Summary")
     print("=" * 60)
 
-    for symbol, statements in all_data.items():
+    for symbol, periods in all_data.items():
         print(f"\n  🏢 {symbol}:")
-        for stmt_type, label in [
-            ("income_statement", "Income Statement"),
-            ("balance_sheet", "Balance Sheet"),
-            ("cash_flow", "Cash Flow"),
-            ("ratios", "Financial Ratios"),
-            ("kpi_metrics", "KPI Metrics"),
-        ]:
-            df = statements.get(stmt_type)
-            if df is not None and not df.empty:
-                print(f"    ✅ {label}: {df.shape[0]} rows × {df.shape[1]} periods")
-            else:
-                print(f"    ❌ {label}: No data")
+        for period_name, statements in periods.items():
+            print(f"    📅 {period_name}:")
+            for stmt_type, label in [
+                ("income_statement", "Income Statement"),
+                ("balance_sheet", "Balance Sheet"),
+                ("cash_flow", "Cash Flow"),
+                ("ratios", "Financial Ratios"),
+                ("kpi_metrics", "KPI Metrics"),
+            ]:
+                df = statements.get(stmt_type)
+                if df is not None and not df.empty:
+                    print(f"      ✅ {label}: {df.shape[0]} rows × {df.shape[1]} periods")
+                else:
+                    print(f"      ❌ {label}: No data")
 
 
 def main():
@@ -65,8 +67,14 @@ def main():
             print(f"\n⏳ Waiting {REQUEST_DELAY}s before next stock...")
             time.sleep(REQUEST_DELAY)
 
-        statements = scrape_all_statements(symbol)
-        all_data[symbol] = statements
+        # Scrape both annual and quarterly
+        statements_annual = scrape_all_statements(symbol, period="annual")
+        statements_quarterly = scrape_all_statements(symbol, period="quarterly")
+
+        all_data[symbol] = {
+            "Annual": statements_annual,
+            "Quarterly": statements_quarterly,
+        }
 
     # Print results
     print_results(all_data)

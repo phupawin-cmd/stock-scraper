@@ -10,22 +10,25 @@ from bs4 import BeautifulSoup
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
-from config import BASE_URL, STATEMENT_TYPES, HEADERS, REQUEST_DELAY
+from config import BASE_URL, STATEMENT_TYPES, PERIOD_TYPES, HEADERS, REQUEST_DELAY
 
 
-def build_url(symbol: str, statement_type: str) -> str:
+def build_url(symbol: str, statement_type: str, period: str = "annual") -> str:
     """
-    Build the full URL for a given stock symbol and statement type.
+    Build the full URL for a given stock symbol, statement type, and period.
 
     Args:
         symbol: Stock ticker symbol (e.g., 'AAPL')
-        statement_type: One of 'income_statement', 'balance_sheet', 'cash_flow'
+        statement_type: One of 'income_statement', 'balance_sheet', 'cash_flow',
+                        'ratios', 'kpi_metrics'
+        period: 'annual' (default) or 'quarterly'
 
     Returns:
         Full URL string
     """
     path = STATEMENT_TYPES.get(statement_type, "financials")
-    return f"{BASE_URL}/{symbol.lower()}/{path}/"
+    query = PERIOD_TYPES.get(period, "")
+    return f"{BASE_URL}/{symbol.lower()}/{path}/{query}"
 
 
 def fetch_page(url: str) -> Optional[str]:
@@ -160,6 +163,11 @@ def _parse_html_table(table, soup: BeautifulSoup) -> pd.DataFrame:
 
     # Determine column headers: use extracted dates > original headers > default
     if period_date_headers is not None and len(period_date_headers) == df.shape[1]:
+        # Preserve "TTM" label from original header row if present
+        # Original: ['Fiscal Year', 'TTM', 'FY 2025', ...]
+        # After date extraction we want: ['Period Ending', 'TTM', 'Sep 30, 2025', ...]
+        if len(headers) > 1 and headers[1].upper() == "TTM":
+            period_date_headers[1] = "TTM"
         df.columns = period_date_headers
     elif len(headers) == df.shape[1]:
         df.columns = headers
@@ -355,18 +363,19 @@ def _try_parse_date(value: str) -> Optional[str]:
         return str(value)
 
 
-def scrape_statement(symbol: str, statement_type: str) -> Optional[pd.DataFrame]:
+def scrape_statement(symbol: str, statement_type: str, period: str = "annual") -> Optional[pd.DataFrame]:
     """
     Scrape a single financial statement for a given stock.
 
     Args:
         symbol: Stock ticker symbol
         statement_type: Type of statement to scrape
+        period: 'annual' (default) or 'quarterly'
 
     Returns:
         Cleaned DataFrame with financial data, or None
     """
-    url = build_url(symbol, statement_type)
+    url = build_url(symbol, statement_type, period)
     print(f"  📄 Fetching: {url}")
 
     html = fetch_page(url)
@@ -375,7 +384,7 @@ def scrape_statement(symbol: str, statement_type: str) -> Optional[pd.DataFrame]
 
     df = parse_financial_table(html)
     if df is None or df.empty:
-        print(f"    ⚠️  No data found for {symbol} - {statement_type}")
+        print(f"    ⚠️  No data found for {symbol} - {statement_type} ({period})")
         return None
 
     # Clean numeric values
@@ -385,17 +394,19 @@ def scrape_statement(symbol: str, statement_type: str) -> Optional[pd.DataFrame]
     return df
 
 
-def scrape_all_statements(symbol: str) -> Dict[str, Optional[pd.DataFrame]]:
+def scrape_all_statements(symbol: str, period: str = "annual") -> Dict[str, Optional[pd.DataFrame]]:
     """
-    Scrape all financial statements for a given stock.
+    Scrape all financial statements for a given stock and period.
 
     Args:
         symbol: Stock ticker symbol
+        period: 'annual' (default) or 'quarterly'
 
     Returns:
         Dictionary mapping statement type names to DataFrames
     """
-    print(f"\n🔍 Scraping financials for {symbol}...")
+    period_label = "Annual" if period == "annual" else "Quarterly"
+    print(f"\n🔍 Scraping {period_label} financials for {symbol}...")
     results = {}
 
     for stmt_type, stmt_label in [
@@ -406,7 +417,7 @@ def scrape_all_statements(symbol: str) -> Dict[str, Optional[pd.DataFrame]]:
         ("kpi_metrics", "KPI Metrics"),
     ]:
         print(f"  📊 {stmt_label}:")
-        df = scrape_statement(symbol, stmt_type)
+        df = scrape_statement(symbol, stmt_type, period)
         results[stmt_type] = df
         time.sleep(REQUEST_DELAY)  # Be respectful to the server
 
